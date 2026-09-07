@@ -1,0 +1,929 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="JARVIS">
+<meta name="theme-color" content="#05080C">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon.png">
+<link rel="icon" href="./icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<title>JARVIS</title>
+
+<style>
+:root{
+  --void:#05080C;
+  --deep:#0A1018;
+  --glass:rgba(255,255,255,.04);
+  --edge:rgba(255,255,255,.08);
+  --edge-top:rgba(255,255,255,.17);
+  --frost:#E6EDF3;
+  --vapor:#8A9BAB;
+  --vapor-dim:#5C6B7A;
+  --glow:#BFE4FF;
+  --depth:#1E3A52;
+  --signal:#FFB86B;
+
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --travel:cubic-bezier(.19,.9,.24,1);
+  --spring:linear(0,.02 1.2%,.09 2.6%,.36 6.5%,.78 11.5%,.94 14.3%,1.03 17.6%,1.06 21.4%,1.04 25.5%,1 32%,1);
+}
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--void);
+  color:var(--frost);
+  font-family:var(--sans);
+  font-weight:300;
+  -webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;
+  position:relative;
+}
+
+/* Browser surfaces — the parts not drawn still carry the design. */
+::selection{background:rgba(191,228,255,.22);color:#F4FAFF}
+::-webkit-scrollbar{width:0;height:0}
+:focus-visible{outline:1px solid rgba(191,228,255,.55);outline-offset:2px;border-radius:6px}
+button{font:inherit;color:inherit;background:none;border:none}
+
+/* ── the scene ───────────────────────────────────────────────────
+   Canvas holds the light: motes, the orb's field, the horizon bleed.
+   Everything above it is DOM so the text stays crisp and selectable. */
+#scene{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
+.grain{
+  position:fixed;inset:-50%;z-index:6;pointer-events:none;opacity:.028;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation:grainshift 6s steps(5) infinite;
+}
+@keyframes grainshift{
+  0%,100%{transform:translate(0,0)} 20%{transform:translate(-2%,1%)}
+  40%{transform:translate(1%,-2%)} 60%{transform:translate(-1%,-1%)}
+  80%{transform:translate(2%,1%)}
+}
+.vignette{
+  position:fixed;inset:0;z-index:5;pointer-events:none;
+  background:radial-gradient(120% 78% at 50% 46%,transparent 42%,rgba(3,5,8,.62) 100%);
+}
+
+/* ── header ──────────────────────────────────────────────────── */
+header{
+  position:relative;z-index:4;flex:none;
+  display:flex;align-items:center;gap:11px;
+  padding:calc(env(safe-area-inset-top) + 15px) 20px 13px;
+  border-bottom:1px solid rgba(255,255,255,.055);
+  background:linear-gradient(180deg,rgba(10,16,24,.86),rgba(10,16,24,.24));
+  backdrop-filter:blur(18px) saturate(1.15);
+  -webkit-backdrop-filter:blur(18px) saturate(1.15);
+}
+header::after{ /* the 1px top-edge highlight, one row down */
+  content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(191,228,255,.16) 30%,rgba(191,228,255,.16) 70%,transparent);
+}
+.pip{
+  width:5px;height:5px;border-radius:50%;flex:none;
+  background:var(--vapor-dim);
+  box-shadow:0 0 0 0 rgba(191,228,255,0);
+  transition:background .5s var(--ease),box-shadow .5s var(--ease);
+}
+.pip.on{background:var(--glow);box-shadow:0 0 12px 1px rgba(191,228,255,.5)}
+.pip.bad{background:var(--signal);box-shadow:0 0 10px 0 rgba(255,184,107,.4)}
+.mark{
+  font-family:var(--mono);font-weight:500;font-size:11.5px;
+  letter-spacing:.34em;color:var(--frost);
+}
+.state{
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--vapor);
+  font-variant-numeric:tabular-nums;
+}
+header .sp{margin-left:auto}
+.ghost{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
+  color:var(--vapor);padding:8px 12px;border-radius:7px;
+  border:1px solid rgba(255,255,255,.07);
+  transition:color .3s var(--ease),border-color .3s var(--ease);
+}
+.ghost:active{color:var(--frost);border-color:rgba(191,228,255,.28)}
+
+/* ── the thread ──────────────────────────────────────────────── */
+#thread{
+  position:relative;z-index:3;flex:1;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:26px 18px 12px;display:flex;flex-direction:column;gap:14px;
+}
+
+.msg{
+  position:relative;max-width:83%;padding:12px 15px 10px;
+  font-size:15.5px;line-height:1.52;letter-spacing:-.005em;
+  white-space:pre-wrap;overflow-wrap:anywhere;
+  border-radius:17px;
+  will-change:transform,opacity;
+}
+/* Things ARRIVE. Nothing fades in from nothing. */
+@keyframes arrive{
+  from{opacity:0;transform:translateY(9px) scale(.965)}
+  to{opacity:1;transform:none}
+}
+.msg,.gate,.sys{animation:arrive .62s var(--travel) both}
+
+/* JARVIS. Glass, lit from the orb — the crescent is an INSET shadow
+   offset along the light direction, never a conic gradient. */
+.them{
+  align-self:flex-start;
+  background:linear-gradient(168deg,rgba(255,255,255,.055),rgba(255,255,255,.022));
+  border:1px solid var(--edge);
+  border-bottom-left-radius:6px;
+  color:var(--frost);
+  backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);
+  box-shadow:
+    0 1px 0 0 var(--edge-top) inset,
+    inset var(--lx,0px) var(--ly,0px) 20px -13px rgb(191 228 255 / calc(var(--lp,0) * 92%)),
+    0 14px 34px -20px rgba(2,5,9,.9);
+}
+/* Glow goes BEHIND, spilling past the edge — never a ring around it. */
+.them::before{
+  content:"";position:absolute;inset:-22px;z-index:-1;border-radius:32px;
+  pointer-events:none;
+  background:radial-gradient(circle at var(--lpx,50%) var(--lpy,50%),
+    rgb(191 228 255 / calc(var(--lp,0) * 15%)),transparent 62%);
+}
+/* His own. Blue lives in the depths, so his side sits deeper, not brighter. */
+.me{
+  align-self:flex-end;
+  background:linear-gradient(168deg,rgba(30,58,82,.62),rgba(19,38,55,.5));
+  border:1px solid rgba(150,200,235,.13);
+  border-bottom-right-radius:6px;
+  color:#DCE7F0;
+  box-shadow:0 1px 0 0 rgba(255,255,255,.09) inset,0 12px 30px -22px rgba(2,5,9,.95);
+}
+.me.pending{opacity:.46}
+.me.failed{border-color:rgba(255,184,107,.5);background:linear-gradient(168deg,rgba(58,42,26,.6),rgba(40,29,19,.5))}
+.when{
+  margin-top:6px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  color:var(--vapor-dim);font-variant-numeric:tabular-nums;
+}
+/* Not a label — this is where a failure is reported ("not sent",
+   "microphone blocked"), so it is sized and lit to be READ, not to
+   decorate. The 9px dim treatment the micro-labels use would have
+   hidden the one line that needs acting on. */
+.sys{
+  align-self:center;max-width:80%;text-align:center;
+  font-family:var(--mono);font-size:12px;line-height:1.45;
+  letter-spacing:.09em;color:var(--vapor);
+  padding:5px 0;
+}
+.sys.alert{color:var(--signal)}
+
+/* Word-by-word arrival on his replies — the phone's echo of the
+   speech-paced transcript on the desktop. */
+.w{display:inline-block;opacity:0;transform:translateY(4px);
+   animation:word .5s var(--travel) both;animation-delay:var(--d,0ms)}
+@keyframes word{to{opacity:1;transform:none}}
+
+/* ── confirmation — the ONE amber thing in an all-ice world ──── */
+.gate{
+  position:relative;align-self:flex-start;max-width:92%;
+  padding:15px 17px 15px;border-radius:15px;
+  background:linear-gradient(168deg,rgba(255,255,255,.06),rgba(255,255,255,.022));
+  border:1px solid rgba(255,184,107,.28);
+  backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);
+  box-shadow:0 1px 0 0 rgba(255,214,166,.22) inset,0 16px 40px -24px rgba(2,5,9,.95);
+}
+.gate::before{
+  content:"";position:absolute;inset:-26px;z-index:-1;border-radius:34px;
+  pointer-events:none;
+  background:radial-gradient(circle at 42% 34%,rgba(255,184,107,.14),transparent 60%);
+}
+.gate h4{
+  font-family:var(--mono);font-weight:400;font-size:9.5px;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--signal);
+  margin-bottom:10px;
+}
+.gate .body{
+  font-size:14.5px;line-height:1.55;color:var(--frost);
+  white-space:pre-wrap;overflow-wrap:anywhere;
+}
+.gate .row{display:flex;gap:9px;margin-top:15px}
+.gate .row button{
+  flex:1;padding:12px 10px;border-radius:10px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.17em;text-transform:uppercase;
+  border:1px solid rgba(255,255,255,.09);color:var(--vapor);
+  transition:transform .3s var(--ease),border-color .3s var(--ease),color .3s var(--ease);
+}
+.gate .row button:active{transform:scale(.97)}
+.gate .row .yes{
+  color:#0D0A06;border-color:transparent;
+  background:linear-gradient(180deg,#FFC98A,#F0A65C);
+  box-shadow:0 6px 20px -10px rgba(255,184,107,.7);
+}
+.gate.done .row{display:none}
+.gate .verdict{
+  display:none;margin-top:13px;font-family:var(--mono);font-size:9px;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--vapor-dim);
+}
+.gate.done .verdict{display:block}
+
+/* ── composer ────────────────────────────────────────────────── */
+form{
+  position:relative;z-index:4;flex:none;
+  display:flex;gap:12px;align-items:flex-end;
+  padding:12px 16px calc(env(safe-area-inset-bottom) + 13px);
+  background:linear-gradient(0deg,rgba(8,12,18,.94),rgba(8,12,18,.55));
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-top:1px solid rgba(255,255,255,.055);
+}
+form::before{
+  content:"";position:absolute;left:0;right:0;top:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(191,228,255,.14) 25%,rgba(191,228,255,.14) 75%,transparent);
+}
+textarea{
+  flex:1;resize:none;max-height:132px;
+  font-family:var(--sans);font-weight:300;font-size:16px;line-height:1.45;
+  color:var(--frost);
+  background:linear-gradient(168deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+  border:1px solid var(--edge);border-radius:21px;
+  padding:12px 17px;
+  box-shadow:0 1px 0 0 var(--edge-top) inset;
+  transition:border-color .35s var(--ease),background .35s var(--ease);
+}
+textarea::placeholder{color:var(--vapor-dim)}
+textarea:focus{outline:none;border-color:rgba(191,228,255,.26)}
+form.listening textarea{
+  border-color:rgba(191,228,255,.4);
+  background:linear-gradient(168deg,rgba(191,228,255,.1),rgba(191,228,255,.03));
+}
+form.listening textarea::placeholder{color:rgba(214,240,255,.75)}
+
+/* ── the orb ─────────────────────────────────────────────────
+   Its own canvas, and it is the state readout as much as the button.
+   Tap to talk; it becomes send once there is something to send. */
+.orb-btn{
+  position:relative;flex:none;width:54px;height:54px;border-radius:50%;
+  overflow:visible;
+  display:grid;place-items:center;
+  transition:transform .4s var(--spring);
+}
+.orb-btn:active{transform:scale(.93)}
+/* The canvas is far bigger than the button and unclipped, because the halo
+   has to spill past the edge — a glow that stops at the border is a ring,
+   which is the cheap look this whole world avoids. The button stays 46px
+   for the tap target; only the light is bigger. */
+.orb-btn canvas{
+  position:absolute;left:50%;top:50%;width:132px;height:132px;
+  transform:translate(-50%,-50%);pointer-events:none;
+}
+.orb-btn .send{
+  position:relative;z-index:2;
+  width:17px;height:17px;
+  opacity:0;transform:scale(.6) rotate(-12deg);
+  transition:opacity .34s var(--ease),transform .44s var(--spring);
+  color:#04121C;
+}
+.orb-btn.sendable .send{opacity:1;transform:none}
+.orb-btn[disabled]{opacity:.4}
+
+/* ── pairing ─────────────────────────────────────────────────── */
+#setup{
+  position:relative;z-index:4;flex:1;overflow-y:auto;
+  padding:min(13vh,90px) 26px 40px;
+}
+#setup .eyebrowless{
+  font-family:var(--mono);font-weight:400;font-size:12.5px;
+  letter-spacing:.4em;color:var(--frost);margin-bottom:14px;
+}
+#setup p{color:var(--vapor);font-size:14.5px;line-height:1.6;max-width:34ch}
+#setup label{
+  display:block;margin:24px 0 7px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--vapor-dim);
+}
+#setup input{
+  width:100%;font-family:var(--mono);font-size:16px;color:var(--frost);
+  background:linear-gradient(168deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+  border:1px solid var(--edge);border-radius:11px;padding:13px 15px;
+  box-shadow:0 1px 0 0 var(--edge-top) inset;
+  transition:border-color .35s var(--ease);
+}
+#setup input::placeholder{color:var(--vapor-dim)}
+#setup input:focus{outline:none;border-color:rgba(191,228,255,.3)}
+#setup #s-go{
+  width:100%;margin-top:30px;padding:15px;border-radius:12px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;
+  color:#04121C;background:linear-gradient(180deg,#DDF0FF,#A9D4F2);
+  box-shadow:0 10px 30px -14px rgba(191,228,255,.6);
+  transition:transform .4s var(--spring);
+}
+#setup #s-go:active{transform:scale(.985)}
+.warn{
+  margin-top:16px;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;
+  color:var(--signal);opacity:0;transition:opacity .4s var(--ease);
+}
+.warn.show{opacity:1}
+
+.hide{display:none!important}
+
+@media (prefers-reduced-motion:reduce){
+  .grain{animation:none}
+  .msg,.gate,.sys,.w{animation-duration:.01ms!important}
+  *{transition-duration:.05s!important}
+}
+</style>
+</head>
+<body>
+
+<canvas id="scene" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<div id="setup" class="hide">
+  <div class="eyebrowless">JARVIS</div>
+  <p>Scan the pairing code from your machine and this fills itself in.
+     Otherwise paste the two topics below.</p>
+  <label for="s-out">Topic it answers on</label>
+  <input id="s-out" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="say-…">
+  <label for="s-in">Topic you send on</label>
+  <input id="s-in" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="ask-…">
+  <label for="s-secret">Secret, if you set one</label>
+  <input id="s-secret" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="usually empty">
+  <div class="warn" id="s-warn">Those are the same topic — they must be the two different ones.</div>
+  <button id="s-go">Connect</button>
+</div>
+
+<header class="hide" id="bar">
+  <span class="pip" id="dot"></span>
+  <span class="mark">JARVIS</span>
+  <span class="state" id="state">connecting</span>
+  <span class="sp"></span>
+  <button class="ghost" id="unpair">Unpair</button>
+</header>
+
+<div id="thread" class="hide"></div>
+
+<form id="composer" class="hide" autocomplete="off">
+  <textarea id="box" rows="1" placeholder="Ask JARVIS…" enterkeyhint="send"></textarea>
+  <button type="submit" id="go" class="orb-btn" aria-label="Send or hold to talk">
+    <canvas id="orb" aria-hidden="true"></canvas>
+    <svg class="send" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 19V5M5 12l7-7 7 7"/>
+    </svg>
+  </button>
+</form>
+
+<script>
+"use strict";
+
+const KEY_CFG="jarvis.cfg.v1", KEY_LOG="jarvis.log.v1", KEEP=200;
+const $=(id)=>document.getElementById(id);
+const REDUCED=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+let cfg=null, log=[], es=null, lastId="", backoff=0;
+
+/* ══ config ══════════════════════════════════════════════════════ */
+function readLink(){
+  const m=/[#&]c=([A-Za-z0-9_-]+)/.exec(location.hash||"");
+  if(!m) return null;
+  try{
+    const json=atob(m[1].replace(/-/g,"+").replace(/_/g,"/"));
+    const got=JSON.parse(decodeURIComponent(escape(json)));
+    if(!got.o||!got.i) return null;
+    return {server:got.s||"https://ntfy.sh",out:got.o,in:got.i,secret:got.k||""};
+  }catch(e){ return null; }
+}
+function load(k,f){ try{ return JSON.parse(localStorage.getItem(k)) ?? f; }catch(e){ return f; } }
+function save(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+
+/* ══ the scene ═══════════════════════════════════════════════════
+   Motes drifting on noise, and the light field they cast. The orb in
+   the composer is the brightest source; bubbles are lit from it. */
+const cv=$("scene"), ctx=cv.getContext("2d",{alpha:true});
+let W=0,H=0,DPR=1;
+
+const PERM=(()=>{ const p=new Uint8Array(512);
+  for(let i=0;i<256;i++) p[i]=i;
+  for(let i=255;i>0;i--){ const j=(Math.sin(i*127.1)*43758.5453%1+1)%1*(i+1)|0; [p[i],p[j]]=[p[j],p[i]]; }
+  for(let i=0;i<256;i++) p[256+i]=p[i];
+  return p; })();
+const fade=(t)=>t*t*t*(t*(t*6-15)+10);
+const lerp=(a,b,t)=>a+(b-a)*t;
+function grad(h,x,y){ const u=(h&1)?-x:x, v=(h&2)?-y:y; return u+v; }
+function noise2(x,y){
+  const X=Math.floor(x)&255, Y=Math.floor(y)&255;
+  x-=Math.floor(x); y-=Math.floor(y);
+  const u=fade(x), v=fade(y);
+  const A=PERM[X]+Y, B=PERM[X+1]+Y;
+  return lerp(lerp(grad(PERM[A],x,y),grad(PERM[B],x-1,y),u),
+              lerp(grad(PERM[A+1],x,y-1),grad(PERM[B+1],x-1,y-1),u),v);
+}
+
+const MOTES=REDUCED?4:9;
+const motes=Array.from({length:MOTES},(_,i)=>({
+  seed:i*31.7, sp:.011+Math.random()*.02, rad:.9+Math.random()*1.5,
+  ph:Math.random()*1000, x:0, y:0
+}));
+
+/* Where the orb sits on screen, in page coordinates. Everything is lit
+   from here, so it is measured once per resize rather than per frame. */
+const light={x:0,y:0};
+function measureLight(){
+  const b=$("go").getBoundingClientRect();
+  light.x=b.left+b.width/2; light.y=b.top+b.height/2;
+}
+
+function resize(){
+  DPR=Math.min(devicePixelRatio||1, REDUCED?1:2);
+  W=innerWidth; H=innerHeight;
+  cv.width=Math.floor(W*DPR); cv.height=Math.floor(H*DPR);
+  cv.style.width=W+"px"; cv.style.height=H+"px";
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  const o=$("orb");
+  if(o){ o.width=Math.floor(ORB_BOX*DPR); o.height=Math.floor(ORB_BOX*DPR); }
+  measureLight(); measureBubbles();
+}
+addEventListener("resize",resize,{passive:true});
+
+/* ══ orb state ═══════════════════════════════════════════════════
+   The orb never lies: it reads idle / listening / thinking / speaking,
+   and amplitude is real — the analyser when the mic is open, and the
+   pace of arriving words when it is not. Never a sine pretending. */
+let orbState="idle";
+let amp=0, ampTarget=0;
+let analyser=null, micStream=null, freqBuf=null;
+
+function setOrb(s){ orbState=s; }
+
+function pulse(v){ ampTarget=Math.max(ampTarget,v); }
+
+function readMic(){
+  if(!analyser) return 0;
+  analyser.getByteTimeDomainData(freqBuf);
+  let peak=0;
+  for(let i=0;i<freqBuf.length;i+=2){
+    const d=Math.abs(freqBuf[i]-128)/128;
+    if(d>peak) peak=d;
+  }
+  return Math.min(1,peak*2.6);
+}
+
+/* The canvas is bigger than the button so the halo has somewhere to go.
+   The orb BODY stays button-sized; only its light extends. */
+const ORB_BOX=132, ORB_R=20.5;
+const orbCv=$("orb"), octx=orbCv?orbCv.getContext("2d"):null;
+let t=0;
+
+function drawOrb(){
+  if(!octx) return;
+  const size=ORB_BOX, R=ORB_R;
+  octx.setTransform(DPR,0,0,DPR,0,0);
+  octx.clearRect(0,0,size,size);
+  octx.save(); octx.translate(size/2,size/2);
+
+  const listening=orbState==="listening";
+  const thinking=orbState==="thinking";
+  const speaking=orbState==="speaking";
+
+  /* Halo — light spilling BEHIND, past the edge. */
+  const halo=octx.createRadialGradient(0,0,R*.18,0,0,R*3.3);
+  halo.addColorStop(0,`rgba(191,228,255,${(.20+amp*.34).toFixed(4)})`);
+  halo.addColorStop(.34,`rgba(140,196,238,${(.07+amp*.10).toFixed(4)})`);
+  halo.addColorStop(1,"rgba(30,58,82,0)");
+  octx.fillStyle=halo;
+  octx.beginPath(); octx.arc(0,0,R*3.3,0,6.2832); octx.fill();
+
+  octx.globalCompositeOperation="lighter";
+  /* Frequency climbs and the shell fragments while thinking; it tightens
+     and pulls inward while listening. Not a spinner, ever. */
+  const freqK = thinking?2.15 : listening?1.35 : 1;
+  const tight = listening?.82:1;
+  const layers=[
+    {k:1.00*tight,freq:2.1*freqK,a2:.115,sp:thinking?.9:.3,a:.30,lw:1.35},
+    {k:.85*tight, freq:3.3*freqK,a2:.085,sp:thinking?-.8:-.24,a:.19,lw:1.0},
+    {k:.68*tight, freq:4.7*freqK,a2:.062,sp:thinking?1.2:.42,a:.13,lw:.8}
+  ];
+  const breathe=1+Math.sin(t*.9)*(REDUCED?0:.022);
+  for(const L of layers){
+    octx.beginPath();
+    const STEPS=REDUCED?54:96;
+    for(let i=0;i<=STEPS;i++){
+      const a2=(i/STEPS)*6.2832;
+      const n=noise2(Math.cos(a2)*L.freq+10, Math.sin(a2)*L.freq+t*L.sp);
+      const rr=R*L.k*breathe*(1+n*L.a2*(1+amp*(speaking?2.4:1.7)));
+      const x=Math.cos(a2)*rr, y=Math.sin(a2)*rr;
+      i===0?octx.moveTo(x,y):octx.lineTo(x,y);
+    }
+    octx.closePath();
+    const tone = listening ? "216,240,255" : "191,228,255";
+    octx.strokeStyle=`rgba(${tone},${(L.a*1.5+amp*.38).toFixed(3)})`;
+    octx.lineWidth=L.lw; octx.stroke();
+    const fill=octx.createRadialGradient(0,0,0,0,0,R*L.k);
+    fill.addColorStop(0,`rgba(150,205,245,${(.05+amp*.09).toFixed(4)})`);
+    fill.addColorStop(1,"rgba(150,205,245,0)");
+    octx.fillStyle=fill; octx.fill();
+  }
+  const core=octx.createRadialGradient(0,0,0,0,0,R*.46);
+  core.addColorStop(0,`rgba(240,250,255,${(.66+amp*.34).toFixed(3)})`);
+  core.addColorStop(.55,"rgba(191,228,255,.13)");
+  core.addColorStop(1,"rgba(191,228,255,0)");
+  octx.fillStyle=core;
+  octx.beginPath(); octx.arc(0,0,R*.46,0,6.2832); octx.fill();
+  octx.restore();
+}
+
+/* Bubble geometry is CACHED and re-measured on scroll/resize/insert —
+   never getBoundingClientRect on every bubble every frame. */
+let geo=[];
+function measureBubbles(){
+  geo=[];
+  const list=document.querySelectorAll(".them");
+  for(const el of list){
+    const b=el.getBoundingClientRect();
+    if(b.bottom<-160||b.top>H+160) continue;
+    geo.push({el,cx:b.left+b.width/2,cy:b.top+b.height/2,w:b.width,h:b.height,
+              l:b.left,tp:b.top});
+  }
+}
+let measureQueued=false;
+function queueMeasure(){
+  if(measureQueued) return;
+  measureQueued=true;
+  requestAnimationFrame(()=>{ measureQueued=false; measureBubbles(); });
+}
+
+function lightBubbles(){
+  for(const g of geo){
+    const dx=light.x-g.cx, dy=light.y-g.cy;
+    const d=Math.hypot(dx,dy);
+    /* falls off with distance — which is WHY most of the screen is dim */
+    const lp=Math.max(0,Math.min(1,1-d/560));
+    const a=Math.atan2(dy,dx);
+    const prev=parseFloat(g.el.style.getPropertyValue("--lp"))||0;
+    const smooth=prev+(lp-prev)*.14;           /* JS lerps it, not CSS */
+    g.el.style.setProperty("--lp",smooth.toFixed(4));
+    g.el.style.setProperty("--lx",(Math.cos(a)*9).toFixed(2)+"px");
+    g.el.style.setProperty("--ly",(Math.sin(a)*9).toFixed(2)+"px");
+    g.el.style.setProperty("--lpx",(((light.x-g.l)/Math.max(1,g.w))*100).toFixed(1)+"%");
+    g.el.style.setProperty("--lpy",(((light.y-g.tp)/Math.max(1,g.h))*100).toFixed(1)+"%");
+  }
+}
+
+function drawScene(){
+  ctx.clearRect(0,0,W,H);
+  /* the orb's field, bleeding up into the thread */
+  const field=ctx.createRadialGradient(light.x,light.y,0,light.x,light.y,Math.max(W,H)*.72);
+  field.addColorStop(0,`rgba(60,110,155,${(.10+amp*.09).toFixed(4)})`);
+  field.addColorStop(.34,"rgba(30,58,82,.05)");
+  field.addColorStop(1,"rgba(5,8,12,0)");
+  ctx.fillStyle=field; ctx.fillRect(0,0,W,H);
+
+  ctx.globalCompositeOperation="lighter";
+  for(const m of motes){
+    const nx=noise2(m.seed, t*m.sp+m.ph);
+    const ny=noise2(m.seed+55.3, t*m.sp*.82+m.ph);
+    m.x=(nx*.5+.5)*W; m.y=(ny*.5+.5)*H;
+    const tw=.4+.6*(noise2(m.seed*3.1,t*.5)*.5+.5);
+    const g=ctx.createRadialGradient(m.x,m.y,0,m.x,m.y,m.rad*19);
+    g.addColorStop(0,`rgba(191,228,255,${(.10*tw).toFixed(4)})`);
+    g.addColorStop(1,"rgba(191,228,255,0)");
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(m.x,m.y,m.rad*19,0,6.2832); ctx.fill();
+    ctx.fillStyle=`rgba(214,240,255,${(.30*tw).toFixed(3)})`;
+    ctx.beginPath(); ctx.arc(m.x,m.y,m.rad*.55,0,6.2832); ctx.fill();
+  }
+  ctx.globalCompositeOperation="source-over";
+}
+
+let raf=null;
+function frame(){
+  t+=REDUCED?.004:.011;
+  if(orbState==="listening" && analyser) ampTarget=readMic();
+  else if(orbState==="thinking") ampTarget=Math.max(ampTarget,.16+Math.abs(noise2(7.7,t*3.4))*.14);
+  ampTarget*=.94;
+  amp+=(ampTarget-amp)*.18;
+  drawScene(); drawOrb(); lightBubbles();
+  raf=requestAnimationFrame(frame);
+}
+function startLoop(){ if(!raf) raf=requestAnimationFrame(frame); }
+function stopLoop(){ if(raf){ cancelAnimationFrame(raf); raf=null; } }
+
+/* ══ rendering ═══════════════════════════════════════════════════ */
+function clock(ms){
+  return new Date(ms||Date.now())
+    .toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+}
+function atBottom(){
+  const th=$("thread");
+  return th.scrollHeight-th.scrollTop-th.clientHeight<140;
+}
+
+function words(text,into){
+  /* Word by word, staggered — his reply lands the way it is spoken.
+     Capped so a long answer does not take a minute to appear. */
+  const parts=String(text).split(/(\s+)/);
+  let i=0;
+  for(const p of parts){
+    if(!p) continue;
+    if(/^\s+$/.test(p)){ into.appendChild(document.createTextNode(p)); continue; }
+    const s=document.createElement("span");
+    s.className="w"; s.textContent=p;
+    s.style.setProperty("--d",Math.min(i*26,1400)+"ms");
+    into.appendChild(s); i++;
+  }
+}
+
+function draw(entry,stick,animate){
+  const th=$("thread");
+  const glued=stick===undefined?atBottom():stick;
+  let el;
+
+  if(entry.kind==="gate"){
+    el=document.createElement("div");
+    el.className="gate"+(entry.answered?" done":"");
+    el.innerHTML='<h4></h4><div class="body"></div>'+
+      '<div class="row"><button class="yes"></button><button class="no"></button></div>'+
+      '<div class="verdict"></div>';
+    el.querySelector("h4").textContent=entry.title||"Needs confirming";
+    el.querySelector(".body").textContent=entry.text||"";
+    const yes=el.querySelector(".yes"), no=el.querySelector(".no");
+    yes.textContent="Yes, do it"; no.textContent="No";
+    el.querySelector(".verdict").textContent=
+      entry.answered==="yes"?"Approved":entry.answered==="no"?"Cancelled":"";
+    yes.onclick=()=>answer(entry,"yes",el);
+    no.onclick=()=>answer(entry,"no",el);
+  }else if(entry.kind==="sys"){
+    el=document.createElement("div");
+    el.className="sys"+(entry.alert?" alert":"");
+    el.textContent=entry.text;
+  }else{
+    el=document.createElement("div");
+    el.className="msg "+(entry.kind==="me"?"me":"them")+(entry.state?" "+entry.state:"");
+    if(entry.kind==="them"&&animate&&!REDUCED) words(entry.text,el);
+    else el.appendChild(document.createTextNode(entry.text));
+    const w=document.createElement("div");
+    w.className="when"; w.textContent=clock(entry.at);
+    el.appendChild(w);
+  }
+  if(!animate) el.style.animation="none";
+  el.dataset.uid=entry.uid;
+  th.appendChild(el);
+  queueMeasure();
+  if(glued) th.scrollTop=th.scrollHeight;
+  return el;
+}
+
+function add(entry,animate=true){
+  entry.uid=entry.uid||(Date.now()+"-"+Math.random().toString(36).slice(2,8));
+  entry.at=entry.at||Date.now();
+  log.push(entry);
+  if(log.length>KEEP) log=log.slice(-KEEP);
+  save(KEY_LOG,log);
+  return draw(entry,undefined,animate);
+}
+
+function touch(entry){
+  save(KEY_LOG,log);
+  const old=document.querySelector('[data-uid="'+entry.uid+'"]');
+  if(!old) return;
+  const fresh=draw(entry,false,false);
+  old.replaceWith(fresh);
+  queueMeasure();
+}
+
+/* ══ sending ═════════════════════════════════════════════════════ */
+function post(text){
+  return fetch(cfg.server.replace(/\/+$/,"")+"/"+cfg.in,{
+    method:"POST",
+    headers:{"Content-Type":"text/plain; charset=utf-8"},
+    body:text,
+  }).then((r)=>{ if(!r.ok) throw new Error("HTTP "+r.status); return r; });
+}
+
+function send(text){
+  text=text.trim();
+  if(!text) return;
+  const wire=cfg.secret?cfg.secret+" "+text:text;
+  add({kind:"me",text:text,state:"pending"});
+  const mine=log[log.length-1];
+  setOrb("thinking"); pulse(.5);
+  post(wire).then(()=>{ mine.state=""; touch(mine); })
+  .catch(()=>{
+    mine.state="failed"; touch(mine);
+    add({kind:"sys",text:"Not sent — no connection. Tap the message to copy it.",alert:true});
+    setOrb("idle");
+  });
+}
+
+function answer(entry,verdict,el){
+  if(entry.answered) return;
+  el.classList.add("done");
+  post("#"+entry.token+" "+verdict).then(()=>{
+    entry.answered=verdict; touch(entry);
+  }).catch(()=>{
+    el.classList.remove("done");
+    add({kind:"sys",text:"Could not send that — try again.",alert:true});
+  });
+}
+
+/* ══ receiving ═══════════════════════════════════════════════════ */
+function status(kind,wordsTxt){
+  $("dot").className="pip "+kind;
+  $("state").textContent=wordsTxt;
+}
+
+function connect(){
+  if(es){ es.close(); es=null; }
+  const base=cfg.server.replace(/\/+$/,"")+"/"+cfg.out+"/sse";
+  const url=base+"?since="+(lastId||"10m");
+  status("","connecting");
+  es=new EventSource(url);
+
+  es.onopen=()=>{ backoff=0; status("on","connected"); };
+
+  es.onmessage=(ev)=>{
+    let m;
+    try{ m=JSON.parse(ev.data); }catch(e){ return; }
+    if(m.event!=="message") return;
+    if(m.id) lastId=m.id;
+    if(log.some((x)=>x.id===m.id)) return;
+
+    const act=(m.actions||[]).find((a)=>/^#\S+\s+yes$/i.test(a.body||""));
+    if(act){
+      add({kind:"gate",id:m.id,token:act.body.split(/\s+/)[0].slice(1),
+           title:(m.title||"").replace(/^Confirm:\s*/i,""),
+           text:(m.message||"").split("\n\nTap below")[0]});
+      setOrb("idle");
+    }else{
+      add({kind:"them",id:m.id,text:m.message||""});
+      /* he is talking: amplitude rides the arriving words, then settles */
+      setOrb("speaking"); pulse(.85);
+      setTimeout(()=>{ if(orbState==="speaking") setOrb("idle"); },1600);
+    }
+  };
+
+  es.onerror=()=>{
+    if(es){ es.close(); es=null; }
+    status("bad","reconnecting");
+    backoff=Math.min(backoff?backoff*2:1000,30000);
+    setTimeout(connect,backoff);
+  };
+}
+
+/* ══ speech ══════════════════════════════════════════════════════
+   webkitSpeechRecognition is what Safari ships; it is prefixed on iOS
+   and unprefixed nowhere that matters here. If it is missing the orb
+   stays a send button and says so once — it never pretends to listen. */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null, listening=false, heardAnything=false;
+
+async function openMic(){
+  /* Real amplitude if the browser will give it. If not, the orb is
+     driven by the pace of interim results instead — still a real
+     signal, just a coarser one. */
+  try{
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return;
+    micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+    const AC=window.AudioContext||window.webkitAudioContext;
+    const ac=new AC();
+    if(ac.state==="suspended") await ac.resume();
+    const src=ac.createMediaStreamSource(micStream);
+    analyser=ac.createAnalyser();
+    analyser.fftSize=512;
+    freqBuf=new Uint8Array(analyser.fftSize);
+    src.connect(analyser);
+  }catch(e){ analyser=null; }
+}
+function closeMic(){
+  analyser=null; freqBuf=null;
+  if(micStream){ micStream.getTracks().forEach((tr)=>tr.stop()); micStream=null; }
+}
+
+function startListening(){
+  if(!SR||listening) return;
+  rec=new SR();
+  rec.lang=(navigator.language||"en-GB");
+  rec.interimResults=true;
+  rec.continuous=false;
+  heardAnything=false;
+
+  rec.onstart=()=>{
+    listening=true; setOrb("listening"); status("on","listening");
+    $("composer").classList.add("listening");
+    $("box").placeholder="Listening…";
+  };
+  rec.onresult=(e)=>{
+    let text="";
+    for(let i=0;i<e.results.length;i++) text+=e.results[i][0].transcript;
+    text=text.trim();
+    if(text){ heardAnything=true; $("box").value=text; sizeBox(); if(!analyser) pulse(.7); }
+  };
+  rec.onerror=(e)=>{
+    listening=false; closeMic(); setOrb("idle"); status("on","connected"); restComposer();
+    if(e.error==="not-allowed"||e.error==="service-not-allowed")
+      add({kind:"sys",text:"Microphone blocked. Allow it in Settings → Safari → Microphone.",alert:true});
+  };
+  rec.onend=()=>{
+    listening=false; closeMic(); setOrb("idle"); status("on","connected"); restComposer();
+    /* Speak, and it sends. Nothing to review, nothing extra to tap —
+       that is the whole reason to talk to it rather than type. */
+    if(heardAnything && $("box").value.trim()){
+      const v=$("box").value; $("box").value=""; sizeBox(); send(v);
+    }
+  };
+  openMic().finally(()=>{ try{ rec.start(); }catch(e){} });
+}
+function restComposer(){
+  $("composer").classList.remove("listening");
+  $("box").placeholder="Ask JARVIS…";
+}
+function stopListening(){ if(rec&&listening){ try{ rec.stop(); }catch(e){} } }
+
+/* ══ wiring ══════════════════════════════════════════════════════ */
+function start(){
+  $("setup").classList.add("hide");
+  ["bar","thread","composer"].forEach((id)=>$(id).classList.remove("hide"));
+  log=load(KEY_LOG,[]);
+  log.forEach((e)=>draw(e,true,false));      /* history does not re-animate */
+  $("thread").scrollTop=$("thread").scrollHeight;
+  resize(); startLoop(); connect();
+  if(!SR) $("go").setAttribute("aria-label","Send");
+}
+function pair(){
+  ["bar","thread","composer"].forEach((id)=>$(id).classList.add("hide"));
+  $("setup").classList.remove("hide");
+  resize(); startLoop();
+}
+
+$("s-go").onclick=()=>{
+  const out=$("s-out").value.trim(), inb=$("s-in").value.trim();
+  const warn=$("s-warn");
+  if(!out||!inb) return;
+  if(out===inb){ warn.classList.add("show"); return; }
+  warn.classList.remove("show");
+  cfg={server:"https://ntfy.sh",out:out,in:inb,secret:$("s-secret").value.trim()};
+  save(KEY_CFG,cfg);
+  start();
+};
+
+$("unpair").onclick=()=>{
+  if(!confirm("Forget the topics and the conversation on this phone?")) return;
+  try{ localStorage.removeItem(KEY_CFG); localStorage.removeItem(KEY_LOG); }catch(e){}
+  if(es){ es.close(); es=null; }
+  log=[]; cfg=null;
+  $("thread").innerHTML=""; geo=[];
+  pair();
+};
+
+const box=$("box");
+function sizeBox(){
+  box.style.height="auto";
+  box.style.height=Math.min(box.scrollHeight,132)+"px";
+  $("go").classList.toggle("sendable",!!box.value.trim());
+}
+box.addEventListener("input",sizeBox);
+box.addEventListener("keydown",(e)=>{
+  if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); $("composer").requestSubmit(); }
+});
+
+$("composer").onsubmit=(e)=>{
+  e.preventDefault();
+  const v=box.value.trim();
+  if(v){
+    box.value=""; sizeBox(); send(v);
+    return;
+  }
+  /* Empty box — the orb is a microphone, not a dead button. */
+  if(!SR){ add({kind:"sys",text:"This browser has no speech recognition — type instead.",alert:true}); return; }
+  listening?stopListening():startListening();
+};
+
+$("thread").addEventListener("scroll",queueMeasure,{passive:true});
+
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){ stopLoop(); return; }
+  startLoop();
+  if(cfg&&(!es||es.readyState===2)){ backoff=0; connect(); }
+});
+addEventListener("online",()=>{ if(cfg){ backoff=0; connect(); } });
+
+if("serviceWorker" in navigator){
+  addEventListener("load",()=>{ navigator.serviceWorker.register("./sw.js").catch(()=>{}); });
+}
+
+const linked=readLink();
+if(linked){
+  cfg=linked; save(KEY_CFG,cfg);
+  history.replaceState(null,"",location.pathname+location.search);
+}else{
+  cfg=load(KEY_CFG,null);
+}
+if(cfg&&cfg.out&&cfg.in) start(); else pair();
+</script>
+</body>
+</html>
