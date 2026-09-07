@@ -1,7 +1,7 @@
 {
   "name": "JARVIS",
   "short_name": "JARVIS",
-  "start_url": "./chat.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",

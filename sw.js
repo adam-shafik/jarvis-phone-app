@@ -1,7 +1,7 @@
 "use strict";
 
-const CACHE = "jarvis-shell-v1";
-const SHELL = ["./", "./chat.html", "./manifest.webmanifest", "./icon.png"];
+const CACHE = "jarvis-shell-v2";
+const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
